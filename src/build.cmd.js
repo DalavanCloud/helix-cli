@@ -17,6 +17,7 @@ const glob = require('glob');
 const path = require('path');
 const RawJSPackager = require('./parcel/RawJSPackager.js');
 const AbstractCommand = require('./abstract.cmd.js');
+const ConfigUtils = require('./config/config-utils.js');
 
 class BuildCommand extends AbstractCommand {
   constructor(logger) {
@@ -57,6 +58,8 @@ class BuildCommand extends AbstractCommand {
    */
   async init() {
     await super.init();
+
+    await ConfigUtils.resolveHelixPipeline(this.log, this.directory);
 
     // ensure target is absolute
     this._target = path.resolve(this.directory, this._target);

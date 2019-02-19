@@ -1,0 +1,11 @@
+{
+    "name": "name",
+    "version": "0.0.1",
+    "description": "Helix Project",
+    "scripts": {
+        "start": "hlx up",
+        "test": "hlx test"
+    },
+    "author": "",
+    "license": "Apache-2.0"
+}

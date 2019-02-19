@@ -133,6 +133,8 @@ class UpCommand extends BuildCommand {
       process.kill(process.pid, 'SIGUSR1');
     }
 
+    console.log('up:', module.paths);
+
     this._project = new HelixProject()
       .withCwd(this.directory)
       .withBuildDir(this._target)
