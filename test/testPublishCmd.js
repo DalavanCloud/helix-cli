@@ -12,22 +12,19 @@
 
 /* eslint-env mocha */
 
-const Replay = require('replay');
+// const Replay = require('replay');
+const nock = require('nock');
 const fs = require('fs-extra');
 const path = require('path');
 const assert = require('assert');
 const { HelixConfig, Logger } = require('@adobe/helix-shared');
-const { initGit, createTestRoot } = require('./utils.js');
+const { initGit, createTestRoot, mochaTestToFilename } = require('./utils.js');
 const PublishCommand = require('../src/publish.cmd');
 
-// disable replay for this test
-Replay.mode = 'bloody';
-Replay.fixtures = path.resolve(__dirname, 'fixtures');
-
 let FASTLY_AUTH = '---';
-const FASTLY_NAMESPACE = '1s45RKXKEjuo2s0GWrF391';
-let WSK_AUTH = 'nope';
-let WSK_NAMESPACE = '---';
+const FASTLY_NAMESPACE = '54nWWFJicKgbdVHou26Y6a';
+const WSK_AUTH = 'nope';
+const WSK_NAMESPACE = '---';
 
 // const SRC_STRAINS = path.resolve(__dirname, 'fixtures/strains.yaml');
 
@@ -124,44 +121,52 @@ describe('Dynamic Strain (VCL) generation', () => {
 describe('hlx publish (Integration)', function suite() {
   this.timeout(50000);
 
-  let replayheaders;
   let testRoot;
 
-  beforeEach(async () => {
+  let nockScope;
+
+  beforeEach(async function beforeEach() {
     // if you need to re-record the test:
     // - change the mode in the next line to `record`
-    // - set the FASTLY_AUTH, WSK_AUTH and WSK_NAMESPACE environment vars
+    // - set the FASTLY_AUTH environment vars
     // - change the FASTLY_NAMESPACE here in the code
     // - run `npm run record`
     // - commit the changes
 
     if (process.env.MODE === 'record') {
-      ({ FASTLY_AUTH, WSK_AUTH, WSK_NAMESPACE } = process.env);
-      if (!FASTLY_AUTH || !FASTLY_NAMESPACE || !WSK_AUTH || !WSK_NAMESPACE) {
+      ({ FASTLY_AUTH } = process.env);
+      if (!FASTLY_AUTH || !FASTLY_NAMESPACE) {
         /* eslint-disable no-console */
-        console.error('FASTLY_AUTH, WSK_AUTH, WSK_NAMESPACE environment vars');
+        console.error('FASTLY_AUTH environment vars');
         console.error('must be set to re-record test.');
-        console.log(FASTLY_AUTH, FASTLY_NAMESPACE, WSK_AUTH, WSK_NAMESPACE);
         /* eslint-enable no-console */
         process.exit(1);
       }
-      Replay.mode = 'record';
-      fs.removeSync(path.resolve(__dirname, 'fixtures/api.fastly.com-443'));
+      nock.recorder.rec({
+        dont_print: true,
+        output_objects: true,
+      });
     } else {
-      Replay.mode = 'replay';
+      const rec = path.resolve(__dirname, 'fixtures/nock', mochaTestToFilename(this.currentTest));
+      nockScope = nock.load(rec);
     }
 
     testRoot = await createTestRoot();
     await fs.copyFile(path.resolve(__dirname, 'fixtures', 'default.yaml'), path.resolve(testRoot, 'helix-config.yaml'));
-
-    // don't record the authorization header
-    replayheaders = Replay.headers;
-    Replay.headers = Replay.headers.filter(e => new RegExp(e).toString() !== new RegExp(/^body/).toString());
   });
 
-  afterEach(async () => {
-    Replay.mode = 'bloody';
-    Replay.headers = replayheaders;
+  afterEach(async function afterEach() {
+    if (process.env.MODE === 'record') {
+      const nockCalls = nock.recorder.play();
+      nock.recorder.clear();
+      nock.restore();
+      const rec = path.resolve(__dirname, 'fixtures/nock', mochaTestToFilename(this.currentTest));
+      await fs.outputJson(rec, nockCalls, { spaces: 2 });
+    } else {
+      nockScope.forEach((scope) => {
+        scope.done();
+      });
+    }
   });
 
   it('Publish Strains on an existing Service Config', async () => {
@@ -187,10 +192,12 @@ describe('hlx publish (Integration)', function suite() {
 
     // VCL version can be computed and must contain X-Version and '<current version=2> |'
     const vclVersion = await cmd.getVersionVCLSection();
-    assert.notEqual(vclVersion.indexOf('X-Version ='), -1);
-    assert.notEqual(vclVersion.indexOf('req.http.X-Version + "; src=2; cli='), -1);
+    assert.ok(vclVersion.indexOf('X-Version =') > 0);
+    assert.ok(vclVersion.indexOf('req.http.X-Version + "; src=2; cli=') > 0);
   });
+});
 
+describe('hlx publish (Integration - local)', function suite() {
   it('Invalid strains.yaml gets rejected', () => {
     const brokenstrains = path.resolve(__dirname, 'fixtures/broken.yaml');
 

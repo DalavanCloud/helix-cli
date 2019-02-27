@@ -154,6 +154,10 @@ async function processSource(scriptName, type = 'htl') {
   };
 }
 
+function mochaTestToFilename(mochaTest) {
+  return `${mochaTest.fullTitle().replace(/[\W]/g, '_')}.json`;
+}
+
 const perfExample = {
   uuid: '170b278',
   url: 'https://debug.primordialsoup.life/develop/',
@@ -274,4 +278,5 @@ module.exports = {
   processSource,
   perfExample,
   assertZipEntries,
+  mochaTestToFilename,
 };
